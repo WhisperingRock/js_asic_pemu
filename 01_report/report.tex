@@ -116,7 +116,7 @@
 
 \title{\Huge{Jane Street's Protocol Emulator ASIC Competition }}
 \author{\textbf{Authors:} \\Rudy Maga\~{n}a \\ Rogelio Correa \\ Connor Wilson \\ \\}
-\date{\today}
+\date{\hl{Deadline : Jan 18th, 2027}}
 
 \begin{document}
     \maketitle
@@ -134,14 +134,62 @@
 	\chapter{Challenge}
 
 		Design an \textbf{open-source, general purpose} protocol emulator. 
+		More specifically, hardware communication protocols s.a.
+		\begin{itemize}
+			\item UART
+			\item I2C
+			\item SPI
+			\item low-speed USB
+			\item 10Mbit Ethernet
+			\item JTAG, SWD, CAN, \ldots
+		\end{itemize}
+
+		\section{What is a protocol emulator?}
+			A protocol emulator is a small chip/block that mimics the 
+			behavior of a device or protocol. This is achieved with a tiny
+			CPU with an instruction set designed for 
+			\begin{itemize}
+				\item reading/writing pins
+				\item counting cycles
+				\item hit timing well enough to implement a real protocol in \textbf{firmware}.
+			\end{itemize}
+
+		\section{Tips}
+
+			\begin{itemize}
+				\item Recommended work flow:
+					\begin{itemize}
+						\item Run synthesis
+						\item Check mapped cell area
+						\item \hl{leave room for clk-tree buffers and routing}
+						\item Run full place-and-route
+						\item Check timing
+					\end{itemize}
+
+				\item \href{https://www.tinytapeout.com/chips/ttihp0p2/tt_um_urish_sram_test}{SRAM is area efficient over flip-flops for instr memory}
+					
+				\item Start by getting a UART transmitter out of a pin. 
+					Then make it programmable\ldots
+
+			\end{itemize}
 
 	\chapter{Deliverables/Requirements}
 
 		\section{Constraints}
 
-			\subsection{Jane Street}
+			\subsection{Jane Street Rules}
+				\textbf{Process} : IHP's 130nm CMOS5L through TinyTapeout. \\ 
+				
+				\begin{itemize}
+					\item $6 \times 4$ is 24 tiles of $200\mu m \times 150\mu m$. $\sim1K$ logic cells
+					\item \hl{TODO : set \texttt{tiles} in \texttt{info.yaml} to $6\times4$}
+				\end{itemize}
+
+				
 
 			\subsection{Tiny Tapeout}
+
+				What the heck does TT need?? YAML?
 
 	\chapter{Design}
 		
