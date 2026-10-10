@@ -42,3 +42,5 @@ usage_statistics_webtalk.*
 #icarus specific
 *.vvp
 obj_dir/
+# make output
+build/
