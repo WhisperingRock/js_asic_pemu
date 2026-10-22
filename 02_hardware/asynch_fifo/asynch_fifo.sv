@@ -6,6 +6,10 @@
 //   WIDTH = bits per entry
 //   DEPTH = number of entries (must be a power of 2)
 //
+// First Word Fall Through (FWFT) Behavior
+//
+// Read Data is always on output. Read Ptr is only used to detect FULL or EMPTY
+//
 //////////////////////////////////////////////////////////////////////////////////
 
 module asynch_fifo #(parameter WIDTH = 32, DEPTH = 4, NUM_SFF = 2)(
@@ -59,14 +63,14 @@ module asynch_fifo #(parameter WIDTH = 32, DEPTH = 4, NUM_SFF = 2)(
         .clk(rd_clk),     // DESTINATION domain clock
         .nrst(nrst),
         .d_i(wr_gray_ptr),     // from the source domain (must be registered there!)
-        .q_o(wr_gptr_synch) 
+        .q_o(wr_gptr_synch)
     );
 
     synch_ff #(.WIDTH(CL2_D + 1), .STAGES(NUM_SFF)) rptr_to_wclk(
         .clk(wr_clk),     // DESTINATION domain clock
         .nrst(nrst),
         .d_i(rd_gray_ptr),     // from the source domain (must be registered there!)
-        .q_o(rd_gptr_synch) 
+        .q_o(rd_gptr_synch)
     );
 
     // Full: top two bits inverted, all remaining bits equal (Gray code, DEPTH >= 4)
@@ -78,13 +82,16 @@ module asynch_fifo #(parameter WIDTH = 32, DEPTH = 4, NUM_SFF = 2)(
     assign empty = (wr_gptr_synch == rd_gray_ptr);
 
 
+    //FWFT Behavior
+    assign rd_data_o = sram[rd_ptr[CL2_D-1:0]];
+
     // Write Logic
     always_ff @(posedge wr_clk or negedge nrst) begin
         if (!nrst) begin
             wr_ptr <= '0;
             wr_gray_ptr <= '0;
         end
-        else 
+        else
             if (wr_EN && !full) begin
                 sram[wr_ptr[CL2_D-1:0]] <= wr_data_i;
                 wr_ptr <= wr_ptr_nxt;
@@ -99,9 +106,10 @@ module asynch_fifo #(parameter WIDTH = 32, DEPTH = 4, NUM_SFF = 2)(
             rd_ptr <= '0;
             rd_gray_ptr <= '0;
         end
-        else 
+        else
             if (rd_EN && !empty) begin
-                rd_data_o <= sram[rd_ptr[CL2_D-1:0]];
+                //Commented out b/c of FWFT change
+                //rd_data_o <= sram[rd_ptr[CL2_D-1:0]];
                 rd_ptr <= rd_ptr_nxt;
                 rd_gray_ptr <= rptr_gray_nxt;
             end
