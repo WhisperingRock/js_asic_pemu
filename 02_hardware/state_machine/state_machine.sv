@@ -1,13 +1,20 @@
 `timescale 1ns/1ps
 
-module state_machine(
+module state_machine
+#(
+    parameter int ID = -1; //should be assigned during instantiation
+)
+(
     input  logic clk,
     input  logic nrst,
+    input  logic en,
 
     input  logic [15:0] fifo_in,
     input  logic [15:0] pc_next,
-    input  logic    o_pin   // ouput pin
-    input  logic    in_pin   // input pin
+    input  logic    in_pin,   // input pin
+
+    output  logic    o_pin,   // ouput pin
+
 
     output logic [1:0]  po_en, // this will tell us if the pins are input or output.
     output logic rx_fifo_wr_en,
@@ -17,14 +24,15 @@ module state_machine(
 
 //State Machine Enum
 typedef enum logic [1:0] {
+    IDLE,
     EXE,
     WAIT
 } state_t;
 state_t ps, ns;
 
 
-// State Machine ID
-logic [2:0]ID;
+// State Machine ID set in the parameters
+logic [3:0] my_id = ID;
 
 //Pin Shift Direction
     // 0 = right (lsb)
@@ -39,6 +47,8 @@ logic [15:0] osr_reg;
 logic [15:0] isr_reg;
 
 logic [15:0] pc_reg;
+
+logic [15:0] wait_counter;
 
 
 //Instantiations
@@ -80,7 +90,7 @@ decoder_sm decoder(
 // State FF Logic
 always_ff @(posedge clk or negedge nrst) begin
     if (!nrst) begin
-        ps <= WAIT;
+        ps <= IDLE;
     end
     else begin
         ps <= ns;
@@ -88,21 +98,46 @@ always_ff @(posedge clk or negedge nrst) begin
 end //always_ff
 
 
-always_ff @(posedge clk or negedge nrst) begin
+always_comb
+begin
     if (!nrst) begin
-        x_reg <= '0;
-        y_reg <= '0;
-        osr_reg <= '0;
-        isr_reg <= '0;
-        pc_reg <= '0;
+        x_reg = '0;
+        y_reg = '0;
+        osr_reg = '0;
+        isr_reg = '0;
+        pc_reg = '0;
     end
     else begin
         case(ps)
+            // Default state for unused FSMs
+            IDLE:
+            begin
+                if (en) ns = EXE;
+                else ns = IDLE;
+            end
+
+            // Where the FSM should be most of the time, read instruction and execute
             EXE:
+            begin
+                
+            end
+
+            // For timing, there are often delays in programs so this is where the FSM will be while it counts down
             WAIT:
+            begin
+                if (wait_counter == 'b0) ns = EXE;
+                else ns = WAIT;
+            end
             default:
         endcase
     end
 end//always_ff
+
+//counter block
+always_ff @ (posedge clk, negedge nrst)
+begin
+    if(!nrst) wait_counter <= 'b0;
+    else if (ps == WAIT) wait_counter <= wait_counter - 'b1;
+end
 
 endmodule
