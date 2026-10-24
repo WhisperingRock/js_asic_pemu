@@ -10,7 +10,6 @@ module state_machine_tb;
     logic en;
 
     logic [15:0] fifo_in;
-    logic [15:0] pc_next;
     logic    o_pin;   // ouput pin
     logic    in_pin;   // input pin
 
@@ -19,11 +18,33 @@ module state_machine_tb;
     logic tx_fifo_rd_en;
     logic [15:0] fifo_o;
 
-    state_machine #(.ID(0))
+    state_machine #(.ID(0)) dut
     (
-        .(*)
+        .*
     );
 
-    
+    assert_idle_trans: assert property
+    (
+        @(posedge clk) disable iff(!nrst)
+        (dut.ps == dut.IDLE) |=> (dut.ps inside {dut.IDLE, dut.EXE})
+    ) else $error("Illegal transition from IDLE");
+
+    assert_execute_transition: assert property 
+    (
+        @(posedge clk) disable iff (!nrst)
+        (dut.ps == dut.EXE) |=> (dut.ps inside {dut.WAIT, dut.EXE, dut.BLOCK})
+    ) else $error("Illegal transition from WAIT");
+
+    assert_wait_transition: assert property 
+    (
+        @(posedge clk) disable iff (!nrst)
+        (dut.ps == dut.WAIT) |=> (dut.ps inside {dut.WAIT, dut.EXE})
+    ) else $error("Illegal transition from WAIT");
+
+    assert_block_trans: assert property
+    (
+        @(posedge clk) disable iff(!nrst)
+        (dut.ps == dut.BLOCK) |=> (dut.ps inside{dut.EXE})
+    ) else $error("Illegal transition from BLOCK");
 
 endmodule
