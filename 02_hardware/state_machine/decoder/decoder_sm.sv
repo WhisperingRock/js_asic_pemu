@@ -55,6 +55,7 @@ module decoder_sm(
         osr_en = 1'b0;
         o_pin_en = 1'b0;
         data_mux_sel = 1'b0;
+        pindirs_en = 1'b0;
 
         case(ir[14:12])
 
@@ -84,7 +85,7 @@ module decoder_sm(
                 eight_one_mux_sel = 3'b111; // OSR SEL
                 isr_en = 1'b0;
                 osr_en = 1'b0;
-                case(dest):
+                case(dest)
                     3'b000: //pins
                         o_pin_en = 1'b1;
                     3'b001: //X (scratch register X)
@@ -93,17 +94,20 @@ module decoder_sm(
                         y_en = 1'b1;
                     3'b011: //NULL (discard data)
                         eight_one_mux_sel = 3'b011;
-                    3'b100: //PINDIRS // !Inout StateMachine only!
-                    ; // FIX_ME
-                    3'b101: //PC
+                    // 3'b100: //PINDIRS // !Inout StateMachine only!
+                    // ; // FIX_ME! TEMP NULL
+                    3'b101: begin //PC
                         pc_en = 1'b1;
                         pc_sel = 2'b11;
-                    3'b110: //ISR (also sets ISR shift counter to Bit count)
+                    end
+                    3'b110: begin //ISR (also sets ISR shift counter to Bit count)
                         isr_en = 1'b1;
                         osr_en = 1'b0;
-                    3'b111: //OSR
+                    end
+                    3'b111: begin //OSR
                         isr_en = 1'b0;
                         osr_en = 1'b1;
+                    end
                 endcase
             end
             if(ir[15] == 1) begin // IN: ISR <- SRC/Dest
@@ -145,29 +149,34 @@ module decoder_sm(
                 // Source
                 eight_one_mux_sel = ir[2:0];
 
-                case(dest):
+                case(dest)
                     3'b000: //pins
                         o_pin_en = 1'b1;
                     3'b001: //X (scratch register X)
                         x_en = 1'b1;
                     3'b010: //Y (scratch register Y)
                         y_en = 1'b1;
-                    3'b011: //NULL (discard data)
-                        ;
-                    3'b100: //PINDIRS // !Inout StateMachine only!
-                    ; // FIX_ME
-                    3'b101: //PC
+                    // 3'b011: //NULL (discard data)
+                    //     ;
+                    // 3'b100: //PINDIRS // !Inout StateMachine only!
+                    // ; // FIX_ME
+                    3'b101: begin //PC
                         pc_en = 1'b1;
                         pc_sel = 2'b11;
-                    3'b110: //ISR (also sets ISR shift counter to Bit count)
-                    ; // FIX_ME
-                    3'b111: //OSR
-                    ; // FIX_ME
+                    end
+                    3'b110: begin //ISR (also sets ISR shift counter to Bit count)
+                        isr_en = 1'b1;
+                        osr_en = 1'b0;
+                    end
+                    3'b111: begin //OSR
+                        isr_en = 1'b0;
+                        osr_en = 1'b1;
+                    end
                 endcase
             end // else statement
         end
 
-        endcase
+        endcase // Big Case (OP CODE)
     end // always comb
 
     
