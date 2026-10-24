@@ -12,7 +12,7 @@
 module decoder_sm(
     input  logic [15:0] ir,
 
-    output logic [15:0] jmp_beq_addr,
+    output logic [15:0] jmp_addr_set_data,
     output logic [1:0] pc_sel,
     output logic pc_en,
     output logic x_en,
@@ -20,9 +20,11 @@ module decoder_sm(
     output logic isr_en,
     output logic osr_en,
     output logic o_pin_en,
+    output logic pindirs_en, //bi-direction st_mch only
     output logic txfifo_rd_en,
     output logic rxfifo_wr_en,
-    output logic [2:0]out_in_mux_sel
+    output logic [2:0]eight_one_mux_sel,
+    output logic data_mux_sel
 );
     /*
         Destination 3 bits
@@ -38,13 +40,13 @@ module decoder_sm(
     logic [2:0] dest;
 
     assign dest = ir[7:5];
-    assign jmp_beq_addr = ir[4:0];
+    assign jmp_addr_set_data = ir[4:0];
 
     always_comb begin
         //default
         txfifo_rd_en = 1'b0;
         rxfifo_wr_en = 1'b0;
-        out_in_mux_sel = 3'b011; // default NULL
+        eight_one_mux_sel = 3'b011; // default NULL
         pc_sel = 2'b00;
         pc_en = 1'b1;
         x_en = 1'b0;
@@ -52,6 +54,7 @@ module decoder_sm(
         isr_en = 1'b0;
         osr_en = 1'b0;
         o_pin_en = 1'b0;
+        data_mux_sel = 1'b0;
 
         case(ir[14:12])
 
@@ -76,9 +79,9 @@ module decoder_sm(
 
         // ---------- Out and In ---------- //
         3'b001: begin
-            out_in_mux_sel = dest;
 
             if(ir[15] == 0) begin // OUT: OSR -> Dest
+                eight_one_mux_sel = 3'b111; // OSR SEL
                 isr_en = 1'b0;
                 osr_en = 1'b0;
                 case(dest):
@@ -89,19 +92,22 @@ module decoder_sm(
                     3'b010: //Y (scratch register Y)
                         y_en = 1'b1;
                     3'b011: //NULL (discard data)
-                        out_in_mux_sel = 3'b011;
+                        eight_one_mux_sel = 3'b011;
                     3'b100: //PINDIRS // !Inout StateMachine only!
                     ; // FIX_ME
                     3'b101: //PC
                         pc_en = 1'b1;
                         pc_sel = 2'b11;
                     3'b110: //ISR (also sets ISR shift counter to Bit count)
-                    ; // FIX_ME
+                        isr_en = 1'b1;
+                        osr_en = 1'b0;
                     3'b111: //OSR
-                    ; // FIX_ME
+                        isr_en = 1'b0;
+                        osr_en = 1'b1;
                 endcase
             end
             if(ir[15] == 1) begin // IN: ISR <- SRC/Dest
+                eight_one_mux_sel = dest; // Source!
                 isr_en = 1'b1;
             end
         end
@@ -116,6 +122,49 @@ module decoder_sm(
         end
         3'b100: begin // wait
 
+        end
+
+        // ---------- Set and Mov ---------- //
+        3'b011: begin 
+            eight_one_mux_sel = dest;
+
+            // invalid dest check
+            if(ir[15] == 1) begin // SET
+                data_mux_sel = 1'b1;
+
+                case (dest)
+                    3'b000: o_pin_en   = 1'b1; // PINS
+                    3'b001: x_en       = 1'b1; // X: 5 LSBs = Data, rest cleared
+                    3'b010: y_en       = 1'b1; // Y: 5 LSBs = Data, rest cleared
+                    3'b100: pindirs_en = 1'b1; // PINDIRS
+                    default: ;                 // 011 reserved, 101-111 undefined
+                endcase
+            end // if statement
+            else begin // Mov
+                data_mux_sel = 1'b0;
+                // Source
+                eight_one_mux_sel = ir[2:0];
+
+                case(dest):
+                    3'b000: //pins
+                        o_pin_en = 1'b1;
+                    3'b001: //X (scratch register X)
+                        x_en = 1'b1;
+                    3'b010: //Y (scratch register Y)
+                        y_en = 1'b1;
+                    3'b011: //NULL (discard data)
+                        ;
+                    3'b100: //PINDIRS // !Inout StateMachine only!
+                    ; // FIX_ME
+                    3'b101: //PC
+                        pc_en = 1'b1;
+                        pc_sel = 2'b11;
+                    3'b110: //ISR (also sets ISR shift counter to Bit count)
+                    ; // FIX_ME
+                    3'b111: //OSR
+                    ; // FIX_ME
+                endcase
+            end // else statement
         end
 
         endcase
