@@ -5,7 +5,8 @@ module imem
 (
     input wire clk,
     input wire en,
-    input wire we,
+    input wire wen,
+    input wire rden,
     input wire [7:0] addr,
     input wire [15:0] din,
     output wire [15:0] dout
@@ -16,8 +17,8 @@ module imem
 RM_IHPSG13_1P_256x16_c2_bm_bist u_sram (
     .A_CLK       (clk),
     .A_MEN       (en),
-    .A_WEN       (we),
-    .A_REN       (~we),
+    .A_WEN       (wen),
+    .A_REN       (rden),
     .A_ADDR      (addr),
     .A_DIN       (din),
     .A_DOUT      (dout),

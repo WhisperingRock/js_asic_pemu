@@ -19,7 +19,7 @@ module mux4to1#(parameter WIDTH = 16)(
         2'b01: F = B;
         2'b10: F = C;
         2'b11: F = D;
-        default: F = 16'DEAD;
+        default: F = WIDTH'(16'hDEAD);
     endcase
 end
 endmodule
