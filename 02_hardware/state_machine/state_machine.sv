@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module state_machine #(
-    parameter int ID = -1 // Assign during instantiation.
+    parameter int ID = -1, // Assign during instantiation.
+    parameter IMEM_INIT_FILE = "program.mem"
 ) (
     input  logic        clk,
     input  logic        nrst,
@@ -25,7 +26,7 @@ typedef enum logic [1:0] {
 
 state_t ps, ns;
 
-// Datapath register writes are still TODO.
+// Datapath registers.
 logic [15:0] x_reg;
 logic [15:0] y_reg;
 logic [15:0] osr_reg;
@@ -55,6 +56,13 @@ logic        decoder_pc_en;
 logic [1:0]  pc_sel;
 logic        decoder_txfifo_rd_en;
 logic        decoder_rxfifo_wr_en;
+logic        decoder_x_en;
+logic        decoder_y_en;
+logic        decoder_isr_en;
+logic        decoder_osr_en;
+logic        decoder_o_pin_en;
+logic        decoder_pindirs_en;
+logic [1:0]  data_mux_sel;
 logic [15:0] jmp_addr_set_data;
 logic [15:0] src1_imm;
 logic [2:0]  src1_sel;
@@ -62,8 +70,10 @@ logic [2:0]  src2_sel;
 logic [15:0] src1_data;
 logic [15:0] src2_data;
 logic        eq_result;
+logic [15:0] alu_result;
+logic [15:0] write_data;
 
-imem mem (
+imem #(.INIT_FILE(IMEM_INIT_FILE)) mem (
     .clk  (clk),
     .en   (fetch_en),
     .wen  (1'b0),
@@ -85,9 +95,17 @@ mux4to1 #(.WIDTH(8)) pc_mux (
     .A   (sequential_pc),
     .B   (8'b0), // Unused by the decoder.
     .C   (fifo_in[7:0]),
-    .D   (src2_data[7:0]),
+    .D   (write_data[7:0]),
     .SEL (pc_sel),
     .F   (normal_next_pc)
+);
+
+// The current ISA uses the ALU for X-- and Y--; other writes bypass it.
+alu datapath_alu (
+    .a   (src1_data),
+    .b   (16'd1),
+    .sel (1'b1),
+    .out (alu_result)
 );
 
 decoder_sm decoder (
@@ -98,17 +116,17 @@ decoder_sm decoder (
     .pc_sel            (pc_sel),
     .pc_jmp_sel        (branch_taken),
     .pc_en             (decoder_pc_en),
-    .x_en              (),
-    .y_en              (),
-    .isr_en            (),
-    .osr_en            (),
-    .o_pin_en          (),
-    .pindirs_en        (),
+    .x_en              (decoder_x_en),
+    .y_en              (decoder_y_en),
+    .isr_en            (decoder_isr_en),
+    .osr_en            (decoder_osr_en),
+    .o_pin_en          (decoder_o_pin_en),
+    .pindirs_en        (decoder_pindirs_en),
     .txfifo_rd_en      (decoder_txfifo_rd_en),
     .rxfifo_wr_en      (decoder_rxfifo_wr_en),
     .src1_a_mux        (src1_sel),
     .eight_one_mux_sel (src2_sel),
-    .data_mux_sel      ()
+    .data_mux_sel      (data_mux_sel)
 );
 
 always_comb begin
@@ -134,6 +152,16 @@ always_comb begin
     endcase
 end
 
+always_comb begin
+    case (data_mux_sel)
+        2'b00: write_data = src2_data;
+        2'b01: write_data = jmp_addr_set_data;
+        2'b10: write_data = alu_result;
+        default: write_data = '0;
+    endcase
+end
+
+// this shoudl move to the alu in the future
 assign eq_result         = (src1_data == src2_data);
 assign sequential_pc     = pc_out + 8'd1;
 assign branch_target     = jmp_addr_set_data[7:0];
@@ -141,11 +169,12 @@ assign is_branch         = (instruction[14:12] == 3'b010);
 assign predicted_next_pc = is_branch ? branch_target : normal_next_pc;
 assign pc_wren           = fetch_en && (ps == EXE);
 
-// Use execute for every future datapath write as well as FIFO side effects.
+// Qualify every architectural write, including FIFO side effects.
 assign execute        = nrst && en && (ps == EXE) &&
                         !redirect_pending && decoder_pc_en;
 assign tx_fifo_rd_en = execute && decoder_txfifo_rd_en;
 assign rx_fifo_wr_en = execute && decoder_rxfifo_wr_en;
+assign fifo_o         = isr_reg;
 
 always_comb begin
     ns         = ps;
@@ -213,8 +242,26 @@ always_ff @(posedge clk or negedge nrst) begin
         y_reg   <= '0;
         osr_reg <= '0;
         isr_reg <= '0;
+        o_pin   <= 1'b1;
+        po_en   <= '0;
     end
-    // TODO: Add datapath writes qualified by execute.
+    else if (execute) begin
+        if (decoder_x_en)
+            x_reg <= write_data;
+        if (decoder_y_en)
+            y_reg <= write_data;
+
+        // PULL loads the FIFO head; MOV/OUT to OSR use the shared data bus.
+        if (decoder_osr_en)
+            osr_reg <= decoder_txfifo_rd_en ? fifo_in : write_data;
+        if (decoder_isr_en)
+            isr_reg <= write_data;
+        if (decoder_o_pin_en)
+            o_pin <= write_data[0];
+        if (decoder_pindirs_en)
+            po_en <= write_data[1:0];
+    end
+    // TODO: IN/OUT bit-count shifting and MOV invert/bit-reverse options.
 end
 
 always_ff @(posedge clk or negedge nrst) begin

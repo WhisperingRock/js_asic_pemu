@@ -112,17 +112,17 @@ module state_machine_tb;
 
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    state_machine #(.ID(0)) dut
+    // The test object loads RAM after reset instead of using bitstream init.
+    state_machine #(.ID(0), .IMEM_INIT_FILE("")) dut
     (
         .*
     );
 
-    // Testbench-only backdoor: this is the only place coupled to the PDK's
+    // Testbench-only backdoor: this is the only place coupled to the RAM's
     // hierarchy. Replace this adapter when a programming interface exists.
     always @(tb_if.program_loaded) begin
         foreach (tb_if.program_image[a])
-            dut.mem.u_sram.i_SRAM_1P_behavioral_bm_bist.memory[a] =
-                tb_if.program_image[a];
+            dut.mem.ram[a] = tb_if.program_image[a];
     end
 
     initial begin

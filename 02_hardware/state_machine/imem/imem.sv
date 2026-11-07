@@ -51,7 +51,8 @@ module imem #(
     logic [15:0] ram [0:255];
 
     initial begin
-        $readmemh(INIT_FILE, ram, 0, 255);
+        if (INIT_FILE != "")
+            $readmemh(INIT_FILE, ram, 0, 255);
     end
 
     always_ff @(posedge clk) begin
