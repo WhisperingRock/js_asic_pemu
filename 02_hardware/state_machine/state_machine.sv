@@ -63,6 +63,20 @@ logic [15:0] src1_data;
 logic [15:0] src2_data;
 logic        eq_result;
 
+// enable signals
+logic        x_en, y_en, isr_en, osr_en;
+logic        o_pin_en, pindirs_en;
+
+// Datapath: write data for X, Y, pins, pindirs, ISR and OSR.
+logic [1:0]  data_mux_sel;
+logic [15:0] data_bus;
+
+// Shift registers
+logic        is_out, is_in;
+logic [15:0] isr_word;      // full ISR contents
+logic [15:0] osr_word;      // full OSR contents
+logic [15:0] osr_out_bits;  // the bits the current OUT shifts out
+
 imem mem (
     .clk  (clk),
     .en   (fetch_en),
@@ -98,18 +112,44 @@ decoder_sm decoder (
     .pc_sel            (pc_sel),
     .pc_jmp_sel        (branch_taken),
     .pc_en             (decoder_pc_en),
-    .x_en              (),
-    .y_en              (),
-    .isr_en            (),
-    .osr_en            (),
-    .o_pin_en          (),
-    .pindirs_en        (),
+    .x_en              (x_en),
+    .y_en              (y_en),
+    .isr_en            (isr_en),
+    .osr_en            (osr_en),
+    .o_pin_en          (o_pin_en),
+    .pindirs_en        (pindirs_en),
     .txfifo_rd_en      (decoder_txfifo_rd_en),
     .rxfifo_wr_en      (decoder_rxfifo_wr_en),
     .src1_a_mux        (src1_sel),
     .eight_one_mux_sel (src2_sel),
-    .data_mux_sel      ()
+    .data_mux_sel      (data_mux_sel)
 );
+
+input_shift_reg in_shift_reg(
+    .clk      (clk),
+    .rst      (!nrst),
+    .load_en  (execute && ((isr_en && !is_in) || decoder_rxfifo_wr_en)),
+    .in_data  (decoder_rxfifo_wr_en ? 16'b0 : data_bus),
+    .in_count (instruction[4:0]),
+    .shift_dir(1'b1),                     // shift right (LSB first)
+    .shift_en (execute && isr_en && is_in),
+    .rx_word  (isr_word)
+);
+
+// OSR: PULL loads the TX FIFO word; MOV OSR / OUT OSR load data_bus; OUT shifts.
+output_shift_reg out_shift_reg(
+    .clk      (clk),
+    .rst      (!nrst),
+    .load_en  (execute && osr_en),
+    .fifo_data(decoder_txfifo_rd_en ? fifo_in : data_bus),
+    .out_count(instruction[4:0]),
+    .shift_en (execute && is_out),
+    .shift_dir(1'b1),                     // shift right (LSB first)
+    .out_bits (osr_out_bits),
+    .osr_word (osr_word)
+);
+
+
 
 always_comb begin
     case (src1_sel)
@@ -117,8 +157,9 @@ always_comb begin
         3'b001: src1_data = x_reg;
         3'b010: src1_data = y_reg;
         3'b101: src1_data = src1_imm;
-        3'b110: src1_data = isr_reg;
-        3'b111: src1_data = osr_reg;
+        3'b110: src1_data = isr_word;
+        3'b111: src1_data = osr_word;
+
         default: src1_data = '0;
     endcase
 
@@ -128,9 +169,16 @@ always_comb begin
         3'b010: src2_data = y_reg;
         3'b100: src2_data = {14'b0, po_en};
         3'b101: src2_data = {8'b0, pc_out};
-        3'b110: src2_data = isr_reg;
-        3'b111: src2_data = osr_reg;
-        default: src2_data = '0;
+        3'b110: src2_data = isr_word;
+        3'b111: src2_data = is_out ? osr_out_bits : osr_word; // OUT reads the shifted-out bits
+        default: src2_data = '0;                              // 011 = NULL
+    endcase
+
+    case (data_mux_sel)
+        2'b00:   data_bus = src2_data;          // 8 to 1 mux
+        2'b01:   data_bus = jmp_addr_set_data;  // SET immediate {11'b0, ir[4:0]}
+        2'b10:   data_bus = src1_data - 16'd1;  // X-- / Y--
+        default: data_bus = '0;
     endcase
 end
 
@@ -140,6 +188,9 @@ assign branch_target     = jmp_addr_set_data[7:0];
 assign is_branch         = (instruction[14:12] == 3'b010);
 assign predicted_next_pc = is_branch ? branch_target : normal_next_pc;
 assign pc_wren           = fetch_en && (ps == EXE);
+assign is_out = (instruction[15:12] == 4'b0001);
+assign is_in  = (instruction[15:12] == 4'b1001);
+assign fifo_o = isr_word;
 
 // Use execute for every future datapath write as well as FIFO side effects.
 assign execute        = nrst && en && (ps == EXE) &&
@@ -211,8 +262,14 @@ always_ff @(posedge clk or negedge nrst) begin
     if (!nrst) begin
         x_reg   <= '0;
         y_reg   <= '0;
-        osr_reg <= '0;
-        isr_reg <= '0;
+        o_pin <= 1'b0;
+        po_en <= '0;
+    end
+    else if (execute) begin
+        if (x_en)       x_reg <= data_bus;
+        if (y_en)       y_reg <= data_bus;
+        if (o_pin_en)   o_pin <= data_bus[0];
+        if (pindirs_en) po_en <= data_bus[1:0];
     end
     // TODO: Add datapath writes qualified by execute.
 end
