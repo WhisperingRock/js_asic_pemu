@@ -24,7 +24,7 @@ Instructions:
     beq   <src1|imm>, <src2>, <label|addr>
     mov   <dest>, [!|~|::]<src>          !/~ = invert, :: = bit-reverse
     set   <dest>, <value>                dest: pins x y pindirs
-    wait  <polarity>, <src>, <index>     src:  gpio pin irq   (provisional)
+    wait  <polarity>, <src>, <index>     src:  gpio pin irq
     nop                                  = mov y, y
 
 HOW IT'S ORGANIZED
@@ -56,7 +56,7 @@ OPCODES = {
     "jmp":  0b1010,
     "mov":  0b0011,
     "set":  0b1011,
-    "wait": 0b0100,  # FIX_ME: bit 15 of WAIT is still '?' in the ISA
+    "wait": 0b1100,
 }
 
 # Bit positions of every field: (field name, high bit, low bit)
@@ -74,7 +74,8 @@ LAYOUTS = {
     "wait": [("op", 15, 12), ("delay", 11, 8), ("pol", 7, 7),  ("src", 6, 5), ("index", 4, 0)],
 }
 
-# The 8 to 1 mux / destination table
+# The 8 to 1 mux / destination table (pindirs: inout state machine only;
+# isr as an OUT destination also sets the ISR shift counter to the bit count)
 MUX8 = {"pins": 0, "x": 1, "y": 2, "null": 3, "pindirs": 4, "pc": 5, "isr": 6, "osr": 7}
 
 OUT_DEST = MUX8
@@ -82,14 +83,16 @@ IN_SRC   = {k: MUX8[k] for k in ("pins", "x", "y", "null", "isr", "osr")}
 MOV_DEST = MUX8
 MOV_SRC  = MUX8
 MOV_OPTN = {"": 0, "!": 1, "~": 1, "::": 2}    # none / invert / bit-reverse
-SET_DEST = {"pins": 0, "x": 1, "y": 2, "pindirs": 4}
+SET_DEST = {"pins": 0, "x": 1, "y": 2, "pindirs": 4}   # 011 reserved (maybe null later)
 JMP_COND = {"": 0, "!x": 1, "x--": 2, "!y": 3, "y--": 4, "x!=y": 5, "pin": 6, "!osre": 7}
 
-# BEQ: Src1 uses the Source 1 mux, Src2 uses the 8 to 1 mux
+# BEQ: bit 5 picks what ir[11:9] means -- 0: a Source 1 mux select, 1: a 3-bit
+# immediate (0..7). Src2 uses the 8 to 1 mux. Source 1 codes 011/100 are '??'.
 BEQ_SRC1 = {"pins": 0, "x": 1, "y": 2, "isr": 6, "osr": 7}
 BEQ_SRC2 = MUX8
 
-WAIT_SRC = {"gpio": 0, "pin": 1, "irq": 2}
+WAIT_SRC = {"gpio": 0, "pin": 1, "irq": 2}   # 11 reserved
+# If WAIT's index shrinks to 2 bits, change ("index", 4, 0) in LAYOUTS to ("index", 1, 0).
 
 OUT_IN_COUNT = (1, 16)   # legal bit counts for OUT / IN (16-bit registers)
 MAX_PROGRAM  = 32        # 5-bit addresses

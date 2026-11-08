@@ -16,9 +16,11 @@ module alu(
     always_comb begin
         case (sel)
             1'b0:
-                a + b = out;
+                out = a + b;
             1'b1:
-                a - b = out;
+                out = a - b;
+            default:
+                out = '0;
         endcase    
     end
     

@@ -1,0 +1,32 @@
+B081  //  0: set   pindirs, 1        ; drive the pin
+B001  //  1: set   pins, 1           ; line idles high
+B02B  //  2: set   x, 11             ; B0
+9025  //  3: in    x, 5
+B025  //  4: set   x, 5              ; B1
+9025  //  5: in    x, 5
+B02A  //  6: set   x, 10             ; B2
+9025  //  7: in    x, 5
+9061  //  8: in    null, 1
+8000  //  9: pull                    ; OSR <- next byte from the TX FIFO
+B028  // 10: set   x, 8              ; start bit + 8 data bits use the same loop
+B000  // 11: set   pins, 0           ; ---- start bit
+3046  // 12: mov   y, isr
+A05E  // 13: jmp   x--, dly          ; always taken here (x = 8)
+1001  // 14: out   pins, 1           ; ---- data bit (LSB first)
+3046  // 15: mov   y, isr
+A05E  // 16: jmp   x--, dly          ; taken for bits 0-6, falls through on bit 7
+A091  // 17: jmp   y--, lastdly      ; bit 7 waits here: same total length
+B001  // 18: set   pins, 1           ; ---- stop bit, then the line stays high
+B048  // 19: set   y, 8              ; C0
+9045  // 20: in    y, 5
+B05F  // 21: set   y, 31             ; C1
+9045  // 22: in    y, 5
+B042  // 23: set   y, 2              ; C2
+9045  // 24: in    y, 5
+9061  // 25: in    null, 1
+3046  // 26: mov   y, isr
+A09B  // 27: jmp   y--, wait
+A05A  // 28: jmp   x--, pause
+A002  // 29: jmp   next
+A09E  // 30: jmp   y--, dly          ; D taken + 1 not taken = D + 2 cycles
+A00E  // 31: jmp   bit

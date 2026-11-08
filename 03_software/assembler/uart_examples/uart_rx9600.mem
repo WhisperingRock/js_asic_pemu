@@ -1,0 +1,24 @@
+B080  //  0: set   pindirs, 0        ; pin is an input
+B02B  //  1: set   x, 11             ; B0
+9025  //  2: in    x, 5
+B025  //  3: set   x, 5              ; B1
+9025  //  4: in    x, 5
+B02A  //  5: set   x, 10             ; B2
+9025  //  6: in    x, 5
+9061  //  7: in    null, 1           ; ISR = D
+30E6  //  8: mov   osr, isr          ; OSR = D, kept for good
+30C7  //  9: mov   isr, osr
+9061  // 10: in    null, 1           ; ISR = D/2 (half a bit)
+A0CB  // 11: jmp   pin, wait_start   ; line idles high: loop until it goes low
+3046  // 12: mov   y, isr
+A08D  // 13: jmp   y--, half
+A0C9  // 14: jmp   pin, idle         ; high again -> it was a glitch, not a start bit
+B027  // 15: set   x, 7
+3047  // 16: mov   y, osr
+A091  // 17: jmp   y--, bitdly       ; one bit time
+9001  // 18: in    pins, 1           ; sample: the bit enters at ISR[15]
+A050  // 19: jmp   x--, bitloop
+9068  // 20: in    null, 8           ; ISR = 16'h00XX. The D/2 that was in the ISR
+0000  // 21: push                    ; RX FIFO <- byte, ISR cleared
+A0C9  // 22: jmp   pin, idle
+A016  // 23: jmp   stop
