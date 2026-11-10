@@ -111,8 +111,8 @@ module basys3_top #(
         .CLK      (clk),
         .MODE     (1'b0),                // 0 = hex
         .DATA_IN  ({sw, last_byte}),
-        .seg (seg),
-        .an   (an)
+        .CATHODES (seg),
+        .ANODES   (an)
     );
 
     // ---------------------------------------------------------------- core
