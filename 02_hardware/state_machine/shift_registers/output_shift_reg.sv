@@ -2,28 +2,17 @@
 //////////////////////////////////////////////////////////////////////////////////
 // Company: Jane Street Comp
 // Engineer: Michael Sullivan
-//
-// Create Date: 10/29/2026 11:03:24 AM
-// Design Name:
 // Module Name: output_shift_reg
-// Project Name:
-// Target Devices:
-// Tool Versions:
 // Description: Parameterized output shift register. Loads a DATA_WIDTH-bit word
-//              from the FIFO, then shifts out out_count bits per shift from
-//              either the LSB end (shift_dir = 1, right) or the MSB end
-//              (shift_dir = 0, left).
-//
-// Dependencies:
+//              (from the FIFO on PULL, or the data bus on MOV/OUT OSR), then
+//              shifts out out_count bits per shift from either the LSB end
+//              (shift_dir = 1, right) or the MSB end (shift_dir = 0, left).
 //
 // Revision:
+// Revision 0.03 - out_bits is combinational (valid in the same cycle as the
+//                 OUT that consumes it); added osr_word (full OSR contents)
 // Revision 0.02 - Parameterized data width
 // Revision 0.01 - File Created
-// Additional Comments:
-//   COUNT_WIDTH defaults to $clog2(DATA_WIDTH)+1 so out_count can represent
-//   every value from 0 up to and including DATA_WIDTH.
-//   out_count must not exceed DATA_WIDTH.
-//
 //////////////////////////////////////////////////////////////////////////////////
 module output_shift_reg #(
     parameter int DATA_WIDTH  = 16,
@@ -36,26 +25,32 @@ module output_shift_reg #(
     input  logic [COUNT_WIDTH-1:0] out_count,
     input  logic                   shift_en,
     input  logic                   shift_dir,
-    output logic [DATA_WIDTH-1:0]  out_bits
+    output logic [DATA_WIDTH-1:0]  out_bits,
+    output logic [DATA_WIDTH-1:0]  osr_word
 );
 
-    logic [DATA_WIDTH-1:0] osr; //this is the output shift register
+    logic [DATA_WIDTH-1:0] osr;
 
     always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin //reset shift register and output to 0
-            osr      <= '0;
-            out_bits <= '0;
-        end else if (load_en) begin //if load enable is high load register with fifo data
+        if (rst) begin
+            osr <= '0;
+        end else if (load_en) begin
             osr <= fifo_data;
-        end else if (shift_en) begin //if high, we are shifting the bits
-            if (shift_dir == 1'b1) begin //shift_dir == 1 means shift right
-                out_bits <= (osr << (DATA_WIDTH - out_count)) >> (DATA_WIDTH - out_count); //output the out_count least sig bits
-                osr      <= osr >> out_count; //shift right by number of bits we extracted
-            end else begin //shift_dir == 0 means shift left
-                out_bits <= osr >> (DATA_WIDTH - out_count); //output the out_count most sig bits
-                osr      <= osr << out_count; //shift left by number of bits we extracted
-            end
+        end else if (shift_en) begin
+            if (shift_dir == 1'b1) osr <= osr >> out_count;
+            else                   osr <= osr << out_count;
         end
     end
+
+    // The bits this shift sends out. Combinational, so OUT can write them to
+    // its destination on the same clock edge that shifts the OSR.
+    always_comb begin
+        if (shift_dir == 1'b1)
+            out_bits = (osr << (DATA_WIDTH - out_count)) >> (DATA_WIDTH - out_count);
+        else
+            out_bits = osr >> (DATA_WIDTH - out_count);
+    end
+
+    assign osr_word = osr; // the whole OSR (for MOV / BEQ / JMP !OSRE)
 
 endmodule

@@ -20,7 +20,7 @@
 
 module uart_rx_tb;
 
-    parameter MEM_FILE = "receive.mem";
+    parameter MEM_FILE = "program.mem";
 
     localparam real CLK_PERIOD = 10.0;            // ns, 100 MHz
     localparam int  BAUD       = 9600;
@@ -45,7 +45,7 @@ module uart_rx_tb;
 
     always #(CLK_PERIOD / 2) clk = ~clk;
 
-    top_level #(.IMEM_INIT_FILE(MEM_FILE)) dut (
+    top_level_pemu #(.IMEM_INIT_FILE(MEM_FILE)) dut (
         .clk      (clk),
         .nrst     (nrst),
         .sm_en    (sm_en),
@@ -125,7 +125,8 @@ module uart_rx_tb;
         repeat (10) @(posedge clk);
         nrst  = 1'b1;
         sm_en = 1'b1;
-        #1000;                                    // let the program build its delay constant
+        #1000;               
+        $display("D: isr=%0d osr=%0d (both should be 10411)", dut.sm_0.isr_word, dut.sm_0.osr_word);                     // let the program build its delay constant
 
         // 1. bytes with idle gaps
         $display("--- bytes with gaps");

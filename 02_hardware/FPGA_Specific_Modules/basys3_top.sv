@@ -17,7 +17,7 @@
 //
 // Load uart_tx9600.mem to send switch values to a PC terminal, or
 // uart_rx9600.mem to show bytes typed in the terminal on the LEDs.
-//
+// 
 //////////////////////////////////////////////////////////////////////////////////
 
 module basys3_top #(
@@ -119,7 +119,7 @@ module basys3_top #(
     logic       pin_out;
     logic [1:0] pin_dir;
 
-    top_level #(.IMEM_INIT_FILE(IMEM_INIT_FILE)) core (
+    top_level_pemu #(.IMEM_INIT_FILE(IMEM_INIT_FILE)) core (
         .clk      (clk),
         .nrst     (nrst),
         .sm_en    (1'b1),

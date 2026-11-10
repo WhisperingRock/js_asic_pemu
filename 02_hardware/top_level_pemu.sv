@@ -22,7 +22,7 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 
-module top_level #(
+module top_level_pemu #(
     parameter IMEM_INIT_FILE = "program.mem",
     parameter int FIFO_DEPTH = 8,             // power of 2, at least 4
     parameter int NUM_SFF    = 2              // synchronizer stages in the FIFOs

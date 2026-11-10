@@ -1,28 +1,17 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 10/29/2026 11:03:24 AM
-// Design Name: 
 // Module Name: input_shift_reg
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: Parameterized input shift register. Loads a DATA_WIDTH-bit word,
-//              then extracts in_count bits per shift from either the LSB end
-//              (shift_dir = 1, right) or the MSB end (shift_dir = 0, left).
-// 
-// Dependencies: 
-// 
+// Description: Parameterized input shift register. Each shift takes the
+//              in_count LSBs of in_data and shifts them into the ISR, entering
+//              at the MSB end (shift_dir = 1, right) or the LSB end
+//              (shift_dir = 0, left). load_en overwrites the ISR with in_data
+//              (e.g. load 0 to clear it after a PUSH). rx_word is the full ISR.
+//
 // Revision:
+// Revision 0.03 - Shift bits in (accumulate) instead of extracting them;
+//                 rx_word is now the ISR contents
 // Revision 0.02 - Parameterized data width
 // Revision 0.01 - File Created
-// Additional Comments:
-//   COUNT_WIDTH defaults to $clog2(DATA_WIDTH)+1 so in_count can represent
-//   every value from 0 up to and including DATA_WIDTH.
-//   in_count must not exceed DATA_WIDTH.
-// 
 //////////////////////////////////////////////////////////////////////////////////
 module input_shift_reg #(
     parameter int DATA_WIDTH  = 16,
@@ -41,20 +30,19 @@ module input_shift_reg #(
     logic [DATA_WIDTH-1:0] isr;
 
     always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin //reset shift register and output to 0
-            isr     <= '0;
-            rx_word <= '0;
-        end else if (load_en) begin //if load enable is high then we load register with input data
+        if (rst) begin
+            isr <= '0;
+        end else if (load_en) begin
             isr <= in_data;
-        end else if (shift_en) begin //if high we are shifting bits
-            if (shift_dir == 1'b1) begin //shift_dir = 1 means shift direction is right
-                rx_word <= (isr << (DATA_WIDTH - in_count)) >> (DATA_WIDTH - in_count); //output the in_count least sig bits
-                isr     <= isr >> in_count; //shift right by the in_count bits extracted
-            end else begin //shift_dir = 0 means shift direction is left
-                rx_word <= isr >> (DATA_WIDTH - in_count); //output the in_count most sig bits
-                isr     <= isr << in_count; //shift left by the in_count bits extracted
-            end
+        end else if (shift_en) begin
+            if (shift_dir == 1'b1) // right: new bits enter at the MSB end
+                isr <= (isr >> in_count) | (in_data << (DATA_WIDTH - in_count));
+            else                   // left: new bits enter at the LSB end
+                isr <= (isr << in_count) |
+                       ((in_data << (DATA_WIDTH - in_count)) >> (DATA_WIDTH - in_count));
         end
     end
+
+    assign rx_word = isr; // the whole ISR, what PUSH sends to the RX FIFO
 
 endmodule

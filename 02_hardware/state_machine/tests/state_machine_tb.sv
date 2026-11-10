@@ -1,7 +1,7 @@
 // By rogelio
 
 `timescale 1ns/1ps
-`default_nettype none
+//`default_nettype none
 
 interface state_machine_tb_if(input logic clk);
     logic nrst = 1'b0;
@@ -172,4 +172,4 @@ module state_machine_tb;
 
 endmodule
 
-`default_nettype wire
+//`default_nettype wire
