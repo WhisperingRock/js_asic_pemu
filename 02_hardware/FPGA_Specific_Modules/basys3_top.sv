@@ -9,7 +9,7 @@
 //   btnC     reset (hold to reset)
 //   btnU     send: writes {8'b0, sw[7:0]} into the TX FIFO, one word per press
 //   sw[7:0]  byte to send
-//   led[7:0] last byte received (read from the RX FIFO)
+//   LED[7:0] last byte received (read from the RX FIFO)
 //   7-seg    left two digits: sw[7:0] (byte to send), right two: last byte
 //            received, both in hex. E.g. "4869" = about to send 'H', got 'i'.
 //   RsRx     USB-UART, PC -> FPGA  (state machine pin_in)
@@ -27,9 +27,9 @@ module basys3_top #(
     input  logic        btnC,
     input  logic        btnU,
     input  logic [7:0]  sw,
-    output logic [7:0]  led,
-    output logic [7:0]  CATHODES,   // {dp,a,b,c,d,e,f,g}, active low
-    output logic [3:0]  ANODES,     // {d4,d3,d2,d1}, active low, d1 = rightmost
+    output logic [7:0]  LED,
+    output logic [7:0]  seg,   // {dp,a,b,c,d,e,f,g}, active low. Cathode. segin XDC
+    output logic [3:0]  an,     // {d4,d3,d2,d1}, active low, d1 = rightmost. Anode.
     input  logic        RsRx,
     output logic        RsTx
 );
@@ -104,15 +104,15 @@ module basys3_top #(
         if (!nrst)          last_byte <= '0;
         else if (!rx_empty) last_byte <= rx_data[7:0];
     end
-    assign led = last_byte;
+    assign LED = last_byte;
 
     // ---------------------------------------------------------------- 7-segment display
     SevSegDisp display (
         .CLK      (clk),
         .MODE     (1'b0),                // 0 = hex
         .DATA_IN  ({sw, last_byte}),
-        .CATHODES (CATHODES),
-        .ANODES   (ANODES)
+        .seg (seg),
+        .an   (an)
     );
 
     // ---------------------------------------------------------------- core
