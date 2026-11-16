@@ -1,4 +1,9 @@
 `timescale 1ns/1ps
+//////////////////////////////////////////////////////////////////////////////////
+// CARP at Calpoly SLO
+//
+// state_machine -- regular state machine: 2 input pins, 2 output pins.
+//////////////////////////////////////////////////////////////////////////////////
 
 module state_machine #(
     parameter int ID = -1, // Assign during instantiation.
@@ -8,20 +13,23 @@ module state_machine #(
     input  logic        nrst,
     input  logic        en,
     input  logic [15:0] fifo_in,
-    input  logic        in_pin,
 
-    output logic        o_pin,
-    output logic [1:0]  po_en,
+    input  logic [1:0]  in_pins,   // this state machine's 2 input pads (raw)
+    output logic [1:0]  bank_out,  
+    input  logic [15:0] in_bank,   
+
+    output logic [1:0]  o_pins,    // this state machine's 2 output pins
+    output logic [1:0]  po_en,     // output enables. 1 = Output
     output logic        rx_fifo_wr_en,
     output logic        tx_fifo_rd_en,
     output logic [15:0] fifo_o
 );
 
+// WAIT (delay cycles) and BLOCK were removed with the delay field. Stalls
+// (WAIT instruction, and later FIFO empty/full) hold decoder pc_en low instead.
 typedef enum logic [1:0] {
     IDLE,
-    EXE,
-    WAIT,
-    BLOCK
+    EXE
 } state_t;
 
 state_t ps, ns;
@@ -29,7 +37,6 @@ state_t ps, ns;
 // Datapath registers. ISR and OSR live in their shift register modules.
 logic [15:0] x_reg;
 logic [15:0] y_reg;
-logic [15:0] wait_counter;
 
 // The SRAM output and pc_out identify the instruction currently executing.
 logic [15:0] instruction;
@@ -70,6 +77,15 @@ logic        o_pin_en, pindirs_en;
 logic [1:0]  data_mux_sel;
 logic [15:0] data_bus;
 logic [15:0] alu_result;
+
+// Pins
+logic        is_beq, beq_imm;
+logic [3:0]  pin_index;     // instruction bits [11:8]; 0 for BEQ
+logic [15:0] pins_rd;       // in_bank shifted so bit pin_index is at bit 0
+logic [4:0]  wr_count;      // how many output pins a write changes
+logic [1:0]  wr_base_mask;  // wr_count low bits set
+logic [1:0]  pin_wmask;     // which output pins / enables a write changes
+logic [1:0]  pin_wdata;     // write data lined up with those pins
 
 // Shift registers
 logic        is_out, is_in;
@@ -159,20 +175,36 @@ output_shift_reg out_shift_reg(
 );
 
 
+assign bank_out = in_pins;
+
+// ---------------------------------------------------------------- pin index
+assign is_beq    = (instruction[15:12] == 4'b0010);
+assign beq_imm   = is_beq && instruction[5];          // BEQ immediate form
+assign pin_index = is_beq ? 4'd0 : instruction[11:8]; // BEQ has no index field
+assign pins_rd   = in_bank >> pin_index;             // bit `index` at bit 0; past bit 15 reads 0
 
 always_comb begin
-    case (src1_sel)
-        3'b000: src1_data = {15'b0, in_pin};
-        3'b001: src1_data = x_reg;
-        3'b010: src1_data = y_reg;
-        3'b101: src1_data = src1_imm;
-        3'b110: src1_data = isr_word;
-        3'b111: src1_data = osr_word;
-        default: src1_data = '0;
-    endcase
+    // Source 1: operand A (compare, ALU). For BEQ it is the ISA's Source 1 table.
+    if (beq_imm)
+        src1_data = src1_imm;                         // {13'b0, ir[11:9]}
+    else begin
+        case (src1_sel)
+            // All pin reads go through pins_rd. For BEQ the index is 0, so
+            // pins_rd is the whole bank; otherwise pins_rd[0] = in_bank[index].
+            3'b000: src1_data = is_beq ? pins_rd                  // BEQ: whole bank
+                                       : {15'b0, pins_rd[0]};     // JMP PIN / WAIT: pin `index`
+            3'b001: src1_data = x_reg;
+            3'b010: src1_data = y_reg;
+            3'b011: src1_data = pins_rd & x_reg;      // BEQ: pins masked by X
+            3'b100: src1_data = pins_rd & y_reg;      // BEQ: pins masked by Y
+            3'b101: src1_data = pins_rd & osr_word;   // BEQ: pins masked by OSR
+            3'b110: src1_data = isr_word;
+            3'b111: src1_data = osr_word;
+        endcase
+    end
 
     case (src2_sel)
-        3'b000: src2_data = {15'b0, in_pin};
+        3'b000: src2_data = pins_rd;                          // IN / MOV: pins from index
         3'b001: src2_data = x_reg;
         3'b010: src2_data = y_reg;
         3'b100: src2_data = {14'b0, po_en};
@@ -198,6 +230,27 @@ assign predicted_next_pc = is_branch ? branch_target : normal_next_pc;
 assign pc_wren           = fetch_en && (ps == EXE);
 assign is_out = (instruction[15:12] == 4'b0001);
 assign is_in  = (instruction[15:12] == 4'b1001);
+
+// ---------------------------------------------------------------- pin writes
+// OUT changes `count` pins; SET and MOV change every pin from the index up.
+// Data bit 0 goes to output pin `index`. Index 2-15 is past this state
+// machine's 2 outputs, so nothing changes.
+assign wr_count = is_out ? instruction[4:0] : 5'd2;
+
+always_comb begin
+    case (wr_count)
+        5'd0:    wr_base_mask = 2'b00;
+        5'd1:    wr_base_mask = 2'b01;
+        default: wr_base_mask = 2'b11;
+    endcase
+
+    if (pin_index > 4'd1)
+        pin_wmask = 2'b00;
+    else
+        pin_wmask = wr_base_mask << pin_index[0];
+
+    pin_wdata = data_bus[1:0] << pin_index[0];
+end
 assign fifo_o = isr_word;
 
 // Qualify every architectural write, including FIFO side effects.
@@ -230,12 +283,6 @@ always_comb begin
                 end
             end
 
-            WAIT: begin
-                if (wait_counter == '0)
-                    ns = EXE;
-            end
-
-            BLOCK: ; // TODO: Resume when an interrupt arrives.
             default: ns = IDLE;
         endcase
     end
@@ -268,24 +315,17 @@ end
 
 always_ff @(posedge clk or negedge nrst) begin
     if (!nrst) begin
-        x_reg <= '0;
-        y_reg <= '0;
-        o_pin <= 1'b0;
-        po_en <= '0;
+        x_reg  <= '0;
+        y_reg  <= '0;
+        o_pins <= '0;
+        po_en  <= '0;                          // outputs released after reset
     end
     else if (execute) begin
-        if (x_en)       x_reg <= data_bus;
-        if (y_en)       y_reg <= data_bus;
-        if (o_pin_en)   o_pin <= data_bus[0];
-        if (pindirs_en) po_en <= data_bus[1:0];
+        if (x_en)       x_reg  <= data_bus;
+        if (y_en)       y_reg  <= data_bus;
+        if (o_pin_en)   o_pins <= (o_pins & ~pin_wmask) | (pin_wdata & pin_wmask);
+        if (pindirs_en) po_en  <= (po_en  & ~pin_wmask) | (pin_wdata & pin_wmask);
     end
-end
-
-always_ff @(posedge clk or negedge nrst) begin
-    if (!nrst)
-        wait_counter <= '0;
-    else if (en && ps == WAIT && wait_counter != '0)
-        wait_counter <= wait_counter - 16'd1;
 end
 
 endmodule

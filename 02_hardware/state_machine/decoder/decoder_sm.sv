@@ -214,6 +214,17 @@ module decoder_sm(
 
         // ---------- Wait ---------- //
         3'b100: begin
+            pc_en             = 1'b0;
+            case (ir[6:5])                         // source
+                    2'b01: begin                       // PIN: wait until pin == polarity
+                        src1_a_mux        = 3'b000;    // A = pins (pin 0)
+                        eight_one_mux_sel = 3'b011;    // B = NULL (0)
+                        // eq_result = 1 means the pin is 0
+                        pc_en = ir[7] ? !eq_result : eq_result;     // polarity 1: wait for high
+                                                                    // polarity 0: wait for low
+                    end
+                    default: ;                         // GPIO / IRQ not done yet: acts as a NOP
+                endcase
             // FIX_ME: hold PC (pc_en = 0) until the wait condition is met
         end
 
