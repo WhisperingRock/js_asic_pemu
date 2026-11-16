@@ -44,3 +44,5 @@ usage_statistics_webtalk.*
 obj_dir/
 # make output
 build/
+# Vivado runtime file (written where Vivado is launched)
+dfx_runtime.txt
