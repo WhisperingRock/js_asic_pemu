@@ -140,7 +140,7 @@ module basys3_top #(
     ) core (
         .clk      (clk),
         .nrst     (nrst),
-        .sm_en    ({1'b1, run_sync[1]}),     // SM1 always runs, SM0 on sw15
+        .sm_en    (2'b11),
         .wr_req   (wr_req),
         .wr_data  (wr_data),
         .wr_ready (wr_ready),
