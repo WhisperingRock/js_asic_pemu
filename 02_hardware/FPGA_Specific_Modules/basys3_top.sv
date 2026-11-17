@@ -6,6 +6,14 @@
 //
 //   SM0 (regular, spi_tx.mem): sends bytes to the master on MISO
 //   SM1 (bi,      spi_rx.mem): receives bytes from the master on MOSI
+//
+//   Pmod JB = SM0 (regular)                    Pmod JC = SM1 (bidirectional)
+//     JB1  sm0_in[0]   bank 0  CS              JC1  sm1_pins[0]  bank 2  MOSI
+//     JB2  sm0_in[1]   bank 1  SCK             JC2  sm1_pins[1]  bank 3
+//     JB3  sm0_out[0]  MISO                    JC3  sm1_pins[2]  bank 4
+//     JB4  sm0_out[1]  (unused in the demo)    JC4  sm1_pins[3]  bank 5
+//   SM0's outputs are driven only while that output's pindirs bit is 1,
+//   otherwise they float (Z). Unused JC pins are pulled down in the XDC.
 //////////////////////////////////////////////////////////////////////////////////
 
 module basys3_top #(
@@ -21,10 +29,9 @@ module basys3_top #(
     output logic [7:0]  seg,       // {dp,a,b,c,d,e,f,g}, active low. Cathode. seg in XDC
     output logic [3:0]  an,        // {d4,d3,d2,d1}, active low, d1 = rightmost. Anode.
 
-    input  logic        spi_cs,
-    input  logic        spi_sck,
-    output wire         spi_miso,
-    inout  wire  [3:0]  sm1_pins   // [0] = MOSI
+    input  logic [1:0]  sm0_in,    // JB1, JB2
+    output wire  [1:0]  sm0_out,   // JB3, JB4
+    inout  wire  [3:0]  sm1_pins   // JC1-JC4
 );
 
     // ---------------------------------------------------------------- reset
@@ -98,7 +105,7 @@ module basys3_top #(
     logic [1:0][15:0] wr_data;
     logic [1:0]       rx_rd_en, rx_empty;
     logic [1:0][15:0] rx_data;
-    logic [1:0]       sm0_out, sm0_oe;
+    logic [1:0]       sm0_val, sm0_oe;
     logic [3:0]       sm1_oe;
 
     assign wr_req       = {1'b0, sm0_wr_req};   // SM1's TX FIFO is not used
@@ -140,15 +147,14 @@ module basys3_top #(
         .rx_rd_en (rx_rd_en),
         .rx_data  (rx_data),
         .rx_empty (rx_empty),
-        .sm0_in   ({spi_sck, spi_cs}),       // bank 1 = SCK, bank 0 = CS
-        .sm0_out  (sm0_out),
+        .sm0_in   (sm0_in),                  // bank 0 = JB1, bank 1 = JB2
+        .sm0_out  (sm0_val),
         .sm0_oe   (sm0_oe),
         .sm1_pins (sm1_pins),                // straight to the pads (inout)
         .sm1_oe   (sm1_oe)
     );
 
-    // MISO: drive only while SM0 has pindirs[0] = 1 (CS low), else let it float
-    // so another slave can share the line. SM0 output 1 is not used.
-    assign spi_miso = sm0_oe[0] ? sm0_out[0] : 1'bz;
+    assign sm0_out[0] = sm0_val[0]; // JB3 (MISO)
+    assign sm0_out[1] = sm0_val[1]; // JB4
 
 endmodule

@@ -1,0 +1,11 @@
+B090  //  0: set   pindirs[0..], 0   ; all 4 pins are inputs
+C0A0  //  1: wait  1, pins[0]        ; at startup only: make sure CS is idle (high)
+B027  //  2: set   x, 7              ; 8 bits
+C020  //  3: wait  0, pins[0]        ; CS low (passes right away if we're mid-transaction)
+C120  //  4: wait  0, pins[1]        ; SCK low
+C1A0  //  5: wait  1, pins[1]        ; SCK rising edge: master's data is valid
+9201  //  6: in    pins[2], 1        ; sample MOSI into the ISR
+A044  //  7: jmp   x--, bit
+9068  //  8: in    null, 8           ; move the byte down to ISR[7:0]
+0000  //  9: push                    ; RX FIFO <- byte
+A002  // 10: jmp   byte              ; next byte (same transaction or the next one)
