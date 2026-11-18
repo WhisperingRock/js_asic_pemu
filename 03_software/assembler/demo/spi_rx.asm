@@ -3,8 +3,8 @@
 ; Each byte received is pushed to SM1's RX FIFO as 16'h00XX.
 
         set   pindirs[0..], 0   ; all 4 pins are inputs
-        wait  1, pins[0]        ; at startup only: make sure CS is idle (high)
 byte:
+        wait  1, pins[0]        ; at startup only: make sure CS is idle (high)
         set   x, 7              ; 8 bits
         wait  0, pins[0]        ; CS low (passes right away if we're mid-transaction)
 bit:

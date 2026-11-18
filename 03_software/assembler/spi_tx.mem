@@ -1,16 +1,10 @@
-8000  //  0: pull                    ; OSR <- next byte to send
-1001  //  1: out   pins[0], 1        ; its bit 0 onto MISO, ready before the first rising edge
-B026  //  2: set   x, 6              ; 7 more bits (bits 1..7)
-A0C6  //  3: jmp   pins[0], idle     ; CS high: no transaction, let go of MISO
-A1CA  //  4: jmp   pins[1], fall     ; SCK high: master already sampled bit 0, keep going
-A003  //  5: jmp   hold              ; CS still low, no clock yet: keep checking
-B080  //  6: set   pindirs[0], 0     ; let go of MISO (Z)
-C020  //  7: wait  0, pins[0]        ; CS low: we're selected
-B081  //  8: set   pindirs[0], 1     ; drive MISO (bit 0 is already on it)
-C1A0  //  9: wait  1, pins[1]        ; SCK rising: master samples the current bit
-C120  // 10: wait  0, pins[1]        ; SCK falling: our turn to change MISO
-1001  // 11: out   pins[0], 1        ; next bit
-A049  // 12: jmp   x--, bit
-C1A0  // 13: wait  1, pins[1]        ; 8th rising edge: master samples bit 7
-C120  // 14: wait  0, pins[1]        ; 8th falling edge: byte done
-A000  // 15: jmp   byte
+8000  //  0: pull                    ; get the byte to send from the TX FIFO
+1001  //  1: out   pins[0], 1        ; put bit 0 on MISO
+B026  //  2: set   x, 6              ; 7 more bits to go
+C020  //  3: wait  0, pins[0]        ; wait for CS low
+C1A0  //  4: wait  1, pins[1]        ; SCK rising: the Arduino reads MISO
+C120  //  5: wait  0, pins[1]        ; SCK falling: our turn
+1001  //  6: out   pins[0], 1        ; put the next bit on MISO
+A044  //  7: jmp   x--, bit          ; repeat for bits 1..7
+C0A0  //  8: wait  1, pins[0]        ; wait for CS high: transaction over
+A000  //  9: jmp   frame

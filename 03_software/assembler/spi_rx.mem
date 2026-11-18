@@ -8,4 +8,4 @@ C1A0  //  5: wait  1, pins[1]        ; SCK rising edge: master's data is valid
 A044  //  7: jmp   x--, bit
 9068  //  8: in    null, 8           ; move the byte down to ISR[7:0]
 0000  //  9: push                    ; RX FIFO <- byte
-A002  // 10: jmp   byte              ; next byte (same transaction or the next one)
+A001  // 10: jmp   byte              ; next byte (same transaction or the next one)
